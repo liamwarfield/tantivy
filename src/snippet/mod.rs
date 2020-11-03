@@ -108,7 +108,7 @@ impl Snippet {
     }
 
     /// Returns a fragment from the `Snippet`.
-    pub fn fragments(&self) -> &str {
+    pub fn fragment(&self) -> &str {
         &self.fragment
     }
 
@@ -224,13 +224,9 @@ fn select_best_fragments(
         num_snippets = fragments.len();
     }
     if num_snippets <= 0 {
-        snippets.push(Snippet {
-            fragment: String::new(),
-            highlighted: vec![],
-        });
         return snippets;
     }
-    fragments.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+    fragments.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap().reverse());
     for i in 0..num_snippets {
         let fragment = &fragments[i];
         let fragment_text = &text[fragment.start_offset..fragment.stop_offset];
@@ -341,7 +337,7 @@ impl SnippetGenerator {
 
     /// Generates the snippet with the highest score for the given `Document`.
     ///
-    /// This method extract the text associated to the `SnippetGenerator`'s field
+    /// This method extracts the text associated to the `SnippetGenerator`'s field
     /// and computes a snippet.
     pub fn snippet_from_doc(&self, doc: &Document) -> Snippet {
         let text: String = doc
@@ -354,8 +350,8 @@ impl SnippetGenerator {
 
     /// Generates multiple snippets.
     ///
-    /// This method extract the text associated to the `SnippetGenerator`'s field
-    /// and computes a snippet.
+    /// This method extracts the text associated to the `SnippetGenerator`'s field
+    /// and computes multiple snippets.
     pub fn snippets_from_doc(&self, doc: &Document, max_snippets: usize) -> Vec<Snippet> {
         let text: String = doc
             .get_all(self.field)
@@ -412,7 +408,7 @@ Survey in 2016, 2017, and 2018."#;
             String::from("rust") => 1.0,
             String::from("language") => 0.9
         };
-        let fragments = search_fragments(&From::from(SimpleTokenizer), TEST_TEXT, &terms, 100);
+        let mut fragments = search_fragments(&From::from(SimpleTokenizer), TEST_TEXT, &terms, 100);
         assert_eq!(fragments.len(), 7);
         {
             let first = &fragments[0];
@@ -429,7 +425,40 @@ Survey in 2016, 2017, and 2018."#;
             snippet.to_html(),
             "<b>Rust</b> is a systems programming <b>language</b> \
              sponsored by\nMozilla which describes it as a &quot;safe"
-        )
+        );
+
+        let snippets = select_best_fragments(&mut fragments[..], &TEST_TEXT, 3);
+        assert_eq!(snippets.len(), 3);
+        assert_eq!(
+            snippets[0].fragment,
+            "Rust is a systems programming language sponsored by\n\
+             Mozilla which describes it as a \"safe"
+        );
+        assert_eq!(
+            snippets[0].to_html(),
+            "<b>Rust</b> is a systems programming <b>language</b> \
+             sponsored by\nMozilla which describes it as a &quot;safe"
+        );
+        assert_eq!(
+            snippets[1].fragment,
+            "concurrent, practical language\", supporting functional and\n\
+            imperative-procedural paradigms. Rust is"
+        );
+        assert_eq!(
+            snippets[1].to_html(),
+            "concurrent, practical <b>language</b>&quot;, supporting functional and\n\
+            imperative-procedural paradigms. <b>Rust</b> is"
+        );
+        assert_eq!(
+            snippets[2].fragment,
+            "memory safety while still maintaining\nperformance.\n\n\
+            Rust is free and open-source software, released"
+        );
+        assert_eq!(
+            snippets[2].to_html(),
+            "memory safety while still maintaining\nperformance.\n\n\
+            <b>Rust</b> is free and open-source software, released"
+        );
     }
 
     #[test]
@@ -472,7 +501,7 @@ Survey in 2016, 2017, and 2018."#;
         let mut terms = BTreeMap::new();
         terms.insert(String::from("c"), 1.0);
 
-        let fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 3);
+        let mut fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 3);
 
         assert_eq!(fragments.len(), 1);
         {
@@ -485,6 +514,11 @@ Survey in 2016, 2017, and 2018."#;
         let snippet = select_best_fragment(&fragments[..], &text);
         assert_eq!(snippet.fragment, "c d");
         assert_eq!(snippet.to_html(), "<b>c</b> d");
+
+        let snippets = select_best_fragments(&mut fragments[..], &text, 2);
+        assert_eq!(snippets.len(), 1);
+        assert_eq!(snippets[0].fragment, "c d");
+        assert_eq!(snippets[0].to_html(), "<b>c</b> d");
     }
 
     #[test]
@@ -494,7 +528,7 @@ Survey in 2016, 2017, and 2018."#;
         let mut terms = BTreeMap::new();
         terms.insert(String::from("f"), 1.0);
 
-        let fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 3);
+        let mut fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 3);
 
         assert_eq!(fragments.len(), 2);
         {
@@ -507,6 +541,11 @@ Survey in 2016, 2017, and 2018."#;
         let snippet = select_best_fragment(&fragments[..], &text);
         assert_eq!(snippet.fragment, "e f");
         assert_eq!(snippet.to_html(), "e <b>f</b>");
+
+        let snippets = select_best_fragments(&mut fragments[..], &text, 2);
+        assert_eq!(snippets.len(), 2);
+        assert_eq!(snippets[0].fragment, "e f");
+        assert_eq!(snippets[0].to_html(), "e <b>f</b>")
     }
 
     #[test]
@@ -517,7 +556,7 @@ Survey in 2016, 2017, and 2018."#;
         terms.insert(String::from("f"), 1.0);
         terms.insert(String::from("a"), 0.9);
 
-        let fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 7);
+        let mut fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 7);
 
         assert_eq!(fragments.len(), 2);
         {
@@ -530,6 +569,13 @@ Survey in 2016, 2017, and 2018."#;
         let snippet = select_best_fragment(&fragments[..], &text);
         assert_eq!(snippet.fragment, "e f g");
         assert_eq!(snippet.to_html(), "e <b>f</b> g");
+
+        let snippets = select_best_fragments(&mut fragments[..], &text, 2);
+        assert_eq!(snippets.len(), 2);
+        assert_eq!(snippets[0].fragment, "e f g");
+        assert_eq!(snippets[0].to_html(), "e <b>f</b> g");
+        assert_eq!(snippets[1].fragment, "a b c d");
+        assert_eq!(snippets[1].to_html(), "<b>a</b> b c d");
     }
 
     #[test]
@@ -539,11 +585,13 @@ Survey in 2016, 2017, and 2018."#;
         let mut terms = BTreeMap::new();
         terms.insert(String::from("z"), 1.0);
 
-        let fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 3);
+        let mut fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 3);
 
         assert_eq!(fragments.len(), 0);
 
         let snippet = select_best_fragment(&fragments[..], &text);
+        let snippets = select_best_fragments(&mut fragments[..], &text, 5);
+        assert_eq!(snippets.len(), 0);
         assert_eq!(snippet.fragment, "");
         assert_eq!(snippet.to_html(), "");
     }
@@ -553,12 +601,33 @@ Survey in 2016, 2017, and 2018."#;
         let text = "a b c d";
 
         let terms = BTreeMap::new();
-        let fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 3);
+        let mut fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 3);
         assert_eq!(fragments.len(), 0);
 
         let snippet = select_best_fragment(&fragments[..], &text);
+        let snippets = select_best_fragments(&mut fragments[..], &text, 5);
+        assert_eq!(snippets.len(), 0);
         assert_eq!(snippet.fragment, "");
         assert_eq!(snippet.to_html(), "");
+    }
+
+    #[test]
+    fn test_max_snippets() {
+        let text = "a b c d e f f g";
+
+        let mut terms = BTreeMap::new();
+        terms.insert(String::from("f"), 1.0);
+
+        let mut fragments = search_fragments(&From::from(SimpleTokenizer), &text, &terms, 3);
+
+        let snippets = select_best_fragments(&mut fragments[..], &text, 1);
+        assert_eq!(snippets.len(), 1);
+        let snippets = select_best_fragments(&mut fragments[..], &text, 2);
+        assert_eq!(snippets.len(), 2);
+        let snippets = select_best_fragments(&mut fragments[..], &text, 3);
+        assert_eq!(snippets.len(), 2);
+        let snippets = select_best_fragments(&mut fragments[..], &text, 0);
+        assert_eq!(snippets.len(), 0);
     }
 
     #[test]
@@ -645,6 +714,12 @@ Survey in 2016, 2017, and 2018."#;
             snippet_generator.set_max_num_chars(90);
             let snippet = snippet_generator.snippet(TEST_TEXT);
             assert_eq!(snippet.to_html(), "<b>Rust</b> is syntactically similar to C++[according to whom?],\nbut its <b>designers</b> intend it to");
+        }
+        {
+            let snippets = snippet_generator.snippets(TEST_TEXT, 2);
+            assert_eq!(snippets.len(), 2);
+            assert_eq!(snippets[0].to_html(), "<b>Rust</b> is syntactically similar to C++[according to whom?],\nbut its <b>designers</b> intend it to");
+            assert_eq!(snippets[1].to_html(), "<b>Rust</b> is a systems programming language sponsored by\nMozilla which describes it as a &quot;safe")
         }
     }
 }

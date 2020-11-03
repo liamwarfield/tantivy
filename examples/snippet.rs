@@ -70,13 +70,13 @@ fn highlight(snippet: Snippet) -> String {
     let mut start_from = 0;
 
     for (start, end) in snippet.highlighted().iter().map(|h| h.bounds()) {
-        result.push_str(&snippet.fragments()[start_from..start]);
+        result.push_str(&snippet.fragment()[start_from..start]);
         result.push_str(" --> ");
-        result.push_str(&snippet.fragments()[start..end]);
+        result.push_str(&snippet.fragment()[start..end]);
         result.push_str(" <-- ");
         start_from = end;
     }
 
-    result.push_str(&snippet.fragments()[start_from..]);
+    result.push_str(&snippet.fragment()[start_from..]);
     result
 }
